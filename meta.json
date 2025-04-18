@@ -1,0 +1,17 @@
+{
+  "$schema": "https://dl.viam.dev/module.schema.json",
+  "module_id": "joyce:ultrasonic-adafruit",
+  "visibility": "private",
+  "url": "",
+  "description": "Modular sensor component: ultrasonic-adafruit",
+  "models": [
+    {
+      "api": "rdk:component:sensor",
+      "model": "joyce:ultrasonic-adafruit:ultrasonic-adafruit",
+      "short_description": "Provide a short (100 characters or less) description of this model here",
+      "markdown_link": "README.md#model-joyceultrasonic-adafruitultrasonic-adafruit"
+    }
+  ],
+  "entrypoint": "./run.sh",
+  "first_run": ""
+}

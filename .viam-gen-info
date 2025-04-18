@@ -1,0 +1,12 @@
+{
+  "module_name": "ultrasonic-adafruit",
+  "namespace": "joyce",
+  "language": "python",
+  "resource_type": "component",
+  "resource_subtype": "sensor",
+  "model_name": "ultrasonic-adafruit",
+  "enable_cloud_build": false,
+  "initialize_git": false,
+  "generator_version": "0.1.0",
+  "generated_on": "2025-04-18T19:31:03.293767Z"
+}
