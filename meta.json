@@ -1,14 +1,14 @@
 {
   "$schema": "https://dl.viam.dev/module.schema.json",
   "module_id": "joyce:ultrasonic-adafruit",
-  "visibility": "private",
-  "url": "",
+  "visibility": "public",
+  "url": "https://github.com/loopDelicious/viam-ultrasonic-adafruit",
   "description": "Modular sensor component: ultrasonic-adafruit",
   "models": [
     {
       "api": "rdk:component:sensor",
       "model": "joyce:ultrasonic-adafruit:ultrasonic-adafruit",
-      "short_description": "Provide a short (100 characters or less) description of this model here",
+      "short_description": "Get sensor readings from the HC-SR04 ultrasonic sensor.",
       "markdown_link": "README.md#model-joyceultrasonic-adafruitultrasonic-adafruit"
     }
   ],

@@ -1,18 +1,20 @@
-# Module ultrasonic-adafruit 
+# Module ultrasonic-adafruit
 
-Provide a description of the purpose of the module and any relevant information.
+Use the [Adafruit CircuitPython library](https://github.com/adafruit/Adafruit_CircuitPython_HCSR04) for controlling HC-SR04 ultrasonic range sensors
 
 ## Model joyce:ultrasonic-adafruit:ultrasonic-adafruit
 
-Provide a description of the model and any relevant information.
+Get sensor readings from an ultrasonic sensor.
 
 ### Configuration
+
 The following attribute template can be used to configure this model:
 
 ```json
 {
-"attribute_1": <float>,
-"attribute_2": <string>
+  "board": <string>,
+  "echo_interrupt_pin": <string>,
+  "trigger_pin": <string>
 }
 ```
 
@@ -20,31 +22,18 @@ The following attribute template can be used to configure this model:
 
 The following attributes are available for this model:
 
-| Name          | Type   | Inclusion | Description                |
-|---------------|--------|-----------|----------------------------|
-| `attribute_1` | float  | Required  | Description of attribute 1 |
-| `attribute_2` | string | Optional  | Description of attribute 2 |
+| Name                 | Type   | Inclusion | Description                                                            |
+| -------------------- | ------ | --------- | ---------------------------------------------------------------------- |
+| `board`              | string | Required  | Name of the Raspberry Pi board according to the Viam app               |
+| `echo_interrupt_pin` | string | Required  | Number of the echo pin that maps to GPIO pin, must be in Dxx format    |
+| `trigger_pin`        | string | Required  | Number of the trigger pin that maps to GPIO pin, must be in Dxx format |
 
 #### Example Configuration
 
 ```json
 {
-  "attribute_1": 1.0,
-  "attribute_2": "foo"
-}
-```
-
-### DoCommand
-
-If your model implements DoCommand, provide an example payload of each command that is supported and the arguments that can be used. If your model does not implement DoCommand, remove this section.
-
-#### Example DoCommand
-
-```json
-{
-  "command_name": {
-    "arg1": "foo",
-    "arg2": 1
-  }
+  "board": "board-1",
+  "echo_interrupt_pin": "D24",
+  "trigger_pin": "D23"
 }
 ```
