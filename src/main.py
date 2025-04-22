@@ -1,9 +1,8 @@
 import asyncio
-from typing import Any, ClassVar, Final, List, Mapping, Optional, Sequence, Dict, cast
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence
 
 from typing_extensions import Self
 from logging import getLogger
-from viam.components.board import Board
 from viam.components.sensor import Sensor
 from viam.module.module import Module
 from viam.proto.app.robot import ComponentConfig
@@ -17,113 +16,103 @@ import time
 import board as pyboard
 import adafruit_hcsr04
 
-LOGGER = getLogger("ultrasonic-dimled")
+LOGGER = getLogger("ultrasonic-adafruit")
+
+# Mapping of physical pin numbers (as strings) to BCM → board.Dxx
+BOARD_TO_BCM = {
+    "3": 2, "5": 3, "7": 4, "8": 14, "10": 15, "11": 17, "12": 18,
+    "13": 27, "15": 22, "16": 23, "18": 24, "19": 10, "21": 9,
+    "22": 25, "23": 11, "24": 8, "26": 7, "29": 5, "31": 6,
+    "32": 12, "33": 13, "35": 19, "36": 16, "37": 26, "38": 20, "40": 21
+}
 
 class UltrasonicAdafruit(Sensor, EasyResource):
     MODEL: ClassVar[Model] = Model(
         ModelFamily("joyce", "ultrasonic-adafruit"), "ultrasonic-adafruit"
     )
 
-    auto_start = True
-    task: Optional[asyncio.Task] = None  # Ensure task is properly typed
-    event = asyncio.Event()  # Use asyncio.Event for compatibility with asyncio
-
-    @classmethod
-    def start_task(cls) -> None:
-        """Start the background task for the sensor."""
-        if cls.task is None or cls.task.done():
-            cls.task = asyncio.create_task(cls._run_task())
-            LOGGER.info("Background task started.")
-
-    @classmethod
-    async def _run_task(cls) -> None:
-        """Background task to handle sensor operations."""
-        try:
-            while True:
-                cls.event.clear()
-                # Simulate sensor reading or perform actual sensor operations
-                LOGGER.error("Running sensor task...")
-                await asyncio.sleep(1)  # Simulate periodic task
-                cls.event.set()
-        except asyncio.CancelledError:
-            LOGGER.info("Background task cancelled.")
-        except Exception as e:
-            LOGGER.error(f"Error in background task: {e}")
-
     @classmethod
     def new(
         cls, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
     ) -> Self:
-        """This method creates a new instance of this Sensor component.
-        The default implementation sets the name from the `config` parameter and then calls `reconfigure`.
-
-        Args:
-            config (ComponentConfig): The configuration for this resource
-            dependencies (Mapping[ResourceName, ResourceBase]): The dependencies (both implicit and explicit)
-
-        Returns:
-            Self: The resource
-        """
         return super().new(config, dependencies)
+
+    def _resolve_pin(self, pin_str: str):
+        """Resolve a pin string into a board.Dxx object.
+
+        Supports:
+        - Physical pin numbers (e.g., '16')
+        - D-formatted strings (e.g., 'D23')
+        - GPIO-formatted strings (e.g., 'GPIO23')
+        - BCM numbers (e.g., '23')
+        """
+        attr = None
+
+        # Physical pin number
+        if pin_str in BOARD_TO_BCM:
+            bcm = BOARD_TO_BCM[pin_str]
+            attr = f"D{bcm}"
+            LOGGER.info(f"Resolved physical pin {pin_str} → BCM {bcm} → board.{attr}")
+
+        # Dxx format (e.g. D23)
+        elif pin_str.startswith("D") and pin_str[1:].isdigit():
+            attr = pin_str
+            LOGGER.info(f"Using direct board constant: board.{attr}")
+
+        # GPIO format (e.g. GPIO23)
+        elif pin_str.startswith("GPIO") and pin_str[4:].isdigit():
+            attr = f"D{pin_str[4:]}"
+            LOGGER.info(f"Resolved {pin_str} → board.{attr}")
+
+        # Raw BCM (e.g. "23")
+        elif pin_str.isdigit():
+            attr = f"D{pin_str}"
+            LOGGER.info(f"Assuming BCM {pin_str} → board.{attr}")
+
+        else:
+            raise ValueError(f"Invalid pin format: {pin_str}. Use physical pin (e.g. '16'), D23, GPIO23, or BCM number.")
+
+        try:
+            return getattr(pyboard, attr)
+        except AttributeError:
+            raise ValueError(f"{attr} is not available on this board module")
 
     @classmethod
     def validate_config(cls, config: ComponentConfig) -> Sequence[str]:
-        """This method allows you to validate the configuration object received from the machine,
-        as well as to return any implicit dependencies based on that `config`.
-
-        Args:
-            config (ComponentConfig): The configuration for this resource
-
-        Returns:
-            Sequence[str]: A list of implicit dependencies
-        """
         attrs = struct_to_dict(config.attributes)
-        required_dependencies = ["board"]
         required_attributes = ["echo_interrupt_pin", "trigger_pin"]
-        implicit_dependencies = []
-
-        for component in required_dependencies:
-            if component not in attrs or not isinstance(attrs[component], str):
-                raise ValueError(f"{component} is required and must be a string")
-            else:
-                implicit_dependencies.append(attrs[component])
-
-        for attribute in required_attributes:
-            if attribute not in attrs or not isinstance(attrs[attribute], str):
-                raise ValueError(f"{attribute} is required and must be a string")
-
-        return implicit_dependencies
+        for attr in required_attributes:
+            if attr not in attrs or not isinstance(attrs[attr], str):
+                raise ValueError(f"{attr} is required and must be a string")
+        return []
 
     def reconfigure(
         self, config: ComponentConfig, dependencies: Mapping[ResourceName, ResourceBase]
     ):
-        """This method allows you to dynamically update your service when it receives a new `config` object.
-
-        Args:
-            config (ComponentConfig): The new configuration
-            dependencies (Mapping[ResourceName, ResourceBase]): Any dependencies (both implicit and explicit)
-        """
         attrs = struct_to_dict(config.attributes)
-        self.auto_start = bool(attrs.get("auto_start", self.auto_start))
 
-        LOGGER.error("Reconfiguring ultrasonic Adafruit module...")
+        try:
+            trigger_pin_str = str(attrs.get("trigger_pin"))
+            echo_pin_str = str(attrs.get("echo_interrupt_pin"))
+            timeout_sec = float(attrs.get("timeout_ms", 1000)) / 1000.0
 
-        board_resource = dependencies.get(Board.get_resource_name(str(attrs.get("board"))))
-        self.board = cast(Board, board_resource)
+            trigger_pin = self._resolve_pin(trigger_pin_str)
+            echo_pin = self._resolve_pin(echo_pin_str)
 
-        if not self.board:
-            raise ValueError(f"Board resource {attrs.get('board')} not found")
-        self.trigger_pin = str(attrs.get("trigger_pin"))
-        self.echo_interrupt_pin = str(attrs.get("echo_interrupt_pin"))
+            self.sonar = adafruit_hcsr04.HCSR04(
+                trigger_pin=trigger_pin,
+                echo_pin=echo_pin,
+                timeout=timeout_sec
+            )
 
-        if self.auto_start:
-            self.start()
+            self.trigger_pin = trigger_pin_str
+            self.echo_interrupt_pin = echo_pin_str
 
-        trigger_pin = getattr(pyboard, self.trigger_pin)
-        echo_pin = getattr(pyboard, self.echo_interrupt_pin)
-        timeout_sec = float(attrs.get("timeout_ms", 1000)) / 1000.0
-        self.sonar = adafruit_hcsr04.HCSR04(trigger_pin=trigger_pin, echo_pin=echo_pin, timeout=timeout_sec)
-        
+            LOGGER.info("Adafruit HCSR04 initialized successfully")
+
+        except Exception as e:
+            LOGGER.error(f"Failed to initialize HCSR04: {e}")
+
         return super().reconfigure(config, dependencies)
 
     async def get_readings(
@@ -134,12 +123,11 @@ class UltrasonicAdafruit(Sensor, EasyResource):
         **kwargs
     ) -> Mapping[str, SensorReading]:
         try:
-            distance = self.sonar.distance / 100.0  # Convert cm to meters
+            distance = self.sonar.distance / 100.0  # cm to meters
             return {"distance": distance}
-        except RuntimeError:
-            LOGGER.warning("Ultrasonic sensor read failed — retrying")
+        except Exception as e:
+            LOGGER.error(f"Ultrasonic sensor read failed: {e}")
             return {"distance": -1.0}
-
 
     async def do_command(
         self,
@@ -155,26 +143,11 @@ class UltrasonicAdafruit(Sensor, EasyResource):
     ) -> List[Geometry]:
         raise NotImplementedError()
 
-    def start(self):
-        if self.task is None or self.task.done():
-            self.event.clear()
-            self.task = asyncio.create_task(self._background_loop())
-
-    def stop(self):
-        self.event.set()
-        if self.task is not None:
-            self.task.cancel()
-
-    async def _background_loop(self):
-        while not self.event.is_set():
-            await asyncio.sleep(1)
-
     async def close(self):
-        self.stop()
+        pass
 
     def __del__(self):
-        self.stop()
+        pass
 
 if __name__ == "__main__":
     asyncio.run(Module.run_from_registry())
-
